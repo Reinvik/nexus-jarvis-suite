@@ -2,25 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Helper opcional para validar
-function ensure(value: string | undefined, name: string): string {
-  if (!value) {
-    throw new Error(`Falta la variable de entorno: ${name}`);
-  }
-  return value;
-}
-
 const firebaseConfig = {
-  apiKey: ensure(import.meta.env.VITE_FIREBASE_API_KEY, 'VITE_FIREBASE_API_KEY'),
-  authDomain: ensure(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, 'VITE_FIREBASE_AUTH_DOMAIN'),
-  projectId: ensure(import.meta.env.VITE_FIREBASE_PROJECT_ID, 'VITE_FIREBASE_PROJECT_ID'),
-  storageBucket: ensure(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, 'VITE_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: ensure(
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    'VITE_FIREBASE_MESSAGING_SENDER_ID'
-  ),
-  appId: ensure(import.meta.env.VITE_FIREBASE_APP_ID, 'VITE_FIREBASE_APP_ID'),
-  measurementId: ensure(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID, 'VITE_FIREBASE_MEASUREMENT_ID'),
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCXcz0Ci20GZJJ6oux88n7wCL0hcJYGk_0",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "logistic-automation-suite.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "logistic-automation-suite",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "logistic-automation-suite.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "627729067946",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:627729067946:web:8b1675dfdcf2aee76a05d3",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-WB0W73XGMY",
 };
 
 const app = initializeApp(firebaseConfig);
