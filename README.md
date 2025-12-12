@@ -305,8 +305,8 @@ vercel --prod
 ## 👨‍💻 Autor
 
 **Ariel Mella**  
-Desarrollador Full-Stack & RPA Specialist  
-📧 ariel.mella@cial.cl
+Ingeniero de Soluciones Operacionales | Logística & Datos (RPA lead/Python/SAP/AI) | Facilitador Técnico de Mejora Continua
+📧 ariel.mella@cial.cl | ariel.mellag@gmail.com
 
 ---
 
