@@ -1,0 +1,8 @@
+firebase-admin
+customtkinter
+openpyxl
+pandas
+pywin32
+requests
+pillow
+google-generativeai

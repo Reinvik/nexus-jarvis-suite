@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+.DS_Store
+Thumbs.db
+fire.json
+*.log
+transfer_cache.json
+*.spec
+*.xlsx
+!.gitkeep
+# Ignore specific sensitive or large files
+Bot_SesionSAP.py
+
+# Ignore Build Artifacts and heavy folders
+Nexus_Jarvis_Build_*/
+Nexus_Jarvis_app_exe/
+node-v*/
+Interfaz/node_modules/
+Interfaz_Vercel/node_modules/

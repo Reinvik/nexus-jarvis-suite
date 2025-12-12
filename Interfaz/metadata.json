@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Copy of Logistic Automation Suite - Web Controller",
+  "description": "A remote control web dashboard to trigger SAP automation bots running on a local worker machine via Firebase.",
+  "requestFramePermissions": []
+}
