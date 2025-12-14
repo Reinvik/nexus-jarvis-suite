@@ -11,7 +11,14 @@ class BotVisionPizarra:
     def run(self, ruta_imagen=None):
         print("--- INICIANDO BOT DE VISIÓN IA ---")
         
-        API_KEY = "AIzaSyDLu2CjsEZPPM_31c9-Da_zyn0v7SM_5Hc" 
+        # Intentar buscar API KEY en variables de entorno para mayor seguridad
+        API_KEY = os.getenv("GEMINI_API_KEY")
+        if not API_KEY:
+            # Fallback para dev local si no hay env var (opcional, o lanzar error)
+            # Para cumplir con "quitar del repo", NO dejaremos la key hardcodeada.
+            print("⚠️ ADVERTENCIA: No se encontró 'GEMINI_API_KEY' en variables de entorno.")
+            print("El bot de visión no podrá autenticar con Google Gemini.")
+            return
         ANIO_ACTUAL = datetime.now().year
         
         MOTIVOS_DICT = {

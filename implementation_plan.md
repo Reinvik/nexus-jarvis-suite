@@ -1,4 +1,4 @@
-# Implementación de Distribución Nexus Jarvis
+![alt text](image.png)# Implementación de Distribución Nexus Jarvis
 
 ## Objetivo
 Crear una distribución simplificada para usuarios finales y una completa para administración, asegurando que la interfaz coincida exactamente con la solicitud visual del usuario.

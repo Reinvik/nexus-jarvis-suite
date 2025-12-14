@@ -17,7 +17,7 @@ PROMPT_PATH = os.path.join(BASE_DIR, "..", "Alexa_Jarvis", "jarvis_prompt.md")
 DEFAULT_PROMPT = "Eres Jarvis, un asistente de IA irónico y eficiente. Responde brevemente."
 
 # API KEY: Prioridad Variable de Entorno -> Hardcoded (Solo Dev Local)
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") or "AIzaSyBjCXHi0KYfYH1J2QBmYxbbRWIhpBm-Ib0"
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 TRIGGER_PREFIXES = ["NEXUS:", "JARVIS:"]  # Ahora responde a ambos
 AUTHORIZED_EMAILS = ["ariel.mella@cial.cl"]

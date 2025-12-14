@@ -41,6 +41,7 @@ Un módulo estandarizado para que los bots reporten actividad.
 ### 3. Integración Power BI y API
 - **Power BI**: Se conecta al `bitacora_operaciones.csv` en OneDrive. Al estar en la nube, se puede programar refresh automático si se publica en Power BI Service.
 - **Futura API**: Si se requiere una API real, se puede usar Power Automate para leer este CSV y exponer datos, o migrar el CSV a una SharePoint List.
+en power bi extraera información de los excel generados de los Bots de transporte vt11.
 
 ## Plan de Ejecución
 1.  Definir rutas en `settings.json` (para flexibilidad).

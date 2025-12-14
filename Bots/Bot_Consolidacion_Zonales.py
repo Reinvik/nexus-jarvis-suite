@@ -812,23 +812,31 @@ JARVIS - Asistente de Automatización
                 new_dano_mecanico = pd.concat(all_dano_mecanico, ignore_index=True) if all_dano_mecanico else pd.DataFrame()
                 new_transportes = pd.concat(all_transportes, ignore_index=True) if all_transportes else pd.DataFrame()
                 
-                # --- AGREGAR FECHA DE INGRESO ---
-                current_date = datetime.now().strftime("%d/%m/%Y")
+                # --- AGREGAR FECHA DE INGRESO Y COLUMNA COLOR ---
+                current_date = datetime.now().strftime("%d/%m/%Y %H:%M")
                 
                 if not new_faltantes.empty:
                     new_faltantes['Fecha_Agregado'] = current_date
-                    # Inicializar Estado_NC si no existe
                     if 'Estado_NC' not in new_faltantes.columns:
                         new_faltantes['Estado_NC'] = ""
+                    if 'Procesado_Color' not in new_faltantes.columns:
+                        new_faltantes['Procesado_Color'] = ""
                         
                 if not new_sobrantes.empty:
                     new_sobrantes['Fecha_Agregado'] = current_date
+                    if 'Procesado_Color' not in new_sobrantes.columns:
+                        new_sobrantes['Procesado_Color'] = ""
                     
                 if not new_dano_mecanico.empty:
                     new_dano_mecanico['Fecha_Agregado'] = current_date
+                    if 'Procesado_Color' not in new_dano_mecanico.columns:
+                        new_dano_mecanico['Procesado_Color'] = ""
                     
                 if not new_transportes.empty:
                     new_transportes['Fecha_Agregado'] = current_date
+                    if 'Procesado_Color' not in new_transportes.columns:
+                        new_transportes['Procesado_Color'] = ""
+                # --------------------------------
                 # --------------------------------
                 
                 final_faltantes = pd.concat([existing_faltantes, new_faltantes], ignore_index=True)
@@ -843,25 +851,25 @@ JARVIS - Asistente de Automatización
                     before = len(final_faltantes)
                     # Usamos subset para drop_duplicates, excluyendo metadatos variables
                     # IMPORTANTE: keep='first' conserva el registro ANTIGUO (con su fecha original)
-                    subset_cols = [c for c in final_faltantes.columns if c not in ['Fecha_Email', 'Estado_NC', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email']]
+                    subset_cols = [c for c in final_faltantes.columns if c not in ['Fecha_Email', 'Estado_NC', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_faltantes = final_faltantes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Faltantes: {before} → {len(final_faltantes)} (eliminados {before - len(final_faltantes)} duplicados)")
                     
                 if not final_sobrantes.empty:
                     before = len(final_sobrantes)
-                    subset_cols = [c for c in final_sobrantes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email']]
+                    subset_cols = [c for c in final_sobrantes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_sobrantes = final_sobrantes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Sobrantes: {before} → {len(final_sobrantes)} (eliminados {before - len(final_sobrantes)} duplicados)")
                     
                 if not final_dano_mecanico.empty:
                     before = len(final_dano_mecanico)
-                    subset_cols = [c for c in final_dano_mecanico.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email']]
+                    subset_cols = [c for c in final_dano_mecanico.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_dano_mecanico = final_dano_mecanico.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Daño Mecánico: {before} → {len(final_dano_mecanico)} (eliminados {before - len(final_dano_mecanico)} duplicados)")
                 
                 if not final_transportes.empty:
                     before = len(final_transportes)
-                    subset_cols = [c for c in final_transportes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email']]
+                    subset_cols = [c for c in final_transportes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_transportes = final_transportes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Transportes: {before} → {len(final_transportes)} (eliminados {before - len(final_transportes)} duplicados)")
 

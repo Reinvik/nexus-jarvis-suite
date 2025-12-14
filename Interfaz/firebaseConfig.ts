@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCXcz0Ci20GZJJ6oux88n7wCL0hcJYGk_0",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "logistic-automation-suite.firebaseapp.com",
   projectId: "logistic-automation-suite",
   storageBucket: "logistic-automation-suite.firebasestorage.app",
