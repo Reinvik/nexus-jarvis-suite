@@ -1,12 +1,14 @@
-import firebase_admin
-from firebase_admin import credentials, firestore
 import time
 import os
 import sys
 import requests
 import tempfile
 import io
+import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+
 
 # --- CONFIGURACIÓN UTF-8 PARA WINDOWS ---
 # Esto evita errores de codificación con emojis en la consola de Windows
@@ -34,113 +36,90 @@ except ImportError as e:
     sys.exit(1)
 
 # --- CONFIGURACIÓN ---
-CREDENTIALS_FILE = "fire.json" 
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PC_NAME = "SANJORGE1"
 
-db = None
+# Headers globales para Supabase
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=minimal"
+}
 
-def init_firebase():
-    global db
-    if not firebase_admin._apps:
-        # Ajuste para PyInstaller y rutas
-        if getattr(sys, 'frozen', False):
-            # Prioridad 1: Junto al ejecutable (carpeta dist/App)
-            base_path_exe = os.path.dirname(sys.executable)
-            cred_path = os.path.join(base_path_exe, CREDENTIALS_FILE)
-            
-            # Prioridad 2: MEIPASS (si se empaquetó dentro)
-            if not os.path.exists(cred_path):
-                base_path_meipass = sys._MEIPASS
-                cred_path_meipass = os.path.join(base_path_meipass, CREDENTIALS_FILE)
-                if os.path.exists(cred_path_meipass):
-                    cred_path = cred_path_meipass
-        else:
-            # Modo desarrollo
-            cred_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), CREDENTIALS_FILE)
-            
-        print(f"[DEBUG] Buscando credenciales en: {cred_path}")
-        
-        if not os.path.exists(cred_path):
-             # Ultimo intento: Path relativo directo (confiando en CWD)
-             print(f"[WARN] No encontrado en ruta absoluta. Intentando relativo: {CREDENTIALS_FILE}")
-             cred_path = CREDENTIALS_FILE 
+def init_supabase():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("❌ Error: Faltan variables de entorno SUPABASE_URL o SUPABASE_KEY")
+        sys.exit(1)
+    # Ya no necesitamos crear un cliente pesado, usaremos requests
 
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-    
-    db = firestore.client()
+
 
 def start_worker():
-    init_firebase()
+    init_supabase()
     print(f"🤖 WORKER SAP INICIADO EN {PC_NAME}")
-    print("📡 Escuchando órdenes desde la Web...")
+    print("📡 Escuchando órdenes desde Supabase (NexusStaging)...")
     procesar_ordenes()
 
 def procesar_ordenes():
-    # Primero procesar órdenes pendientes existentes
-    print("🔍 Buscando órdenes pendientes existentes...")
-    ordenes_pendientes = db.collection('ordenes_bot').where('status', '==', 'pending').get()
-    
-    for doc in ordenes_pendientes:
-        datos = doc.to_dict()
-        print(f"\n📩 ORDEN PENDIENTE ENCONTRADA: {datos.get('tipo_bot')}")
-        ejecutar_tarea(doc.id, datos)
-    
-    if len(ordenes_pendientes) == 0:
-        print("   No hay órdenes pendientes")
-    
-    # Luego escuchar nuevas órdenes
-    coleccion = db.collection('ordenes_bot').where('status', '==', 'pending')
-    
-    def on_snapshot(col_snapshot, changes, read_time):
-        for change in changes:
-            if change.type.name == 'ADDED' or change.type.name == 'MODIFIED':
-                doc = change.document
-                datos = doc.to_dict()
-                # Solo procesar si realmente está pending (evitar duplicados)
-                if datos.get('status') == 'pending' and datos.get('worker') != PC_NAME:
-                    print(f"\n📩 NUEVA ORDEN RECIBIDA: {datos.get('tipo_bot')}")
-                    ejecutar_tarea(doc.id, datos)
-
-    coleccion.on_snapshot(on_snapshot)
+    print("🔍 Buscando órdenes pendientes...")
+    url = f"{SUPABASE_URL}/rest/v1/ordenes_bot?status=eq.pending"
     
     while True:
-        time.sleep(1)
+        try:
+            # Consultar órdenes pendientes vía REST
+            response = requests.get(url, headers=HEADERS)
+            if response.status_code == 200:
+                ordenes = response.json()
+                for datos in ordenes:
+                    if datos.get('worker') != PC_NAME:
+                        print(f"\n📩 NUEVA ORDEN RECIBIDA: {datos.get('tipo_bot')}")
+                        ejecutar_tarea(datos.get('id'), datos)
+            else:
+                print(f"⚠️ Error Supabase: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"⚠️ Error consultando órdenes: {e}")
+        
+        time.sleep(3) # Polling cada 3 segundos
 
-# --- LOGGER CLOUD ---
-class FirestoreLogger:
-    def __init__(self, doc_ref):
-        self.doc_ref = doc_ref
+# --- LOGGER SUPABASE ---
+class SupabaseLogger:
+    def __init__(self, doc_id):
+        self.doc_id = doc_id
         self.terminal = sys.stdout
+        self.url = f"{SUPABASE_URL}/rest/v1/rpc/append_execution_log"
 
     def write(self, message):
-        # 1. Escribir en la consola local (pantalla negra)
         self.terminal.write(message)
         self.terminal.flush()
-        
-        # 2. Enviar a Firebase si hay texto real
         text = message.strip()
         if text:
             try:
-                self.doc_ref.update({
-                    'execution_logs': firestore.ArrayUnion([text])
+                # Llamada al RPC de logs
+                requests.post(self.url, headers=HEADERS, json={
+                    'order_id': self.doc_id,
+                    'log_line': text
                 })
-            except Exception as e:
-                # Si falla el log, no detener el bot, solo avisar en local
-                sys.stderr.write(f"⚠️ Error enviando log a web: {e}\n")
+            except:
+                pass
 
     def flush(self):
         self.terminal.flush()
 
+
+
 def ejecutar_tarea(doc_id, datos):
-    doc_ref = db.collection('ordenes_bot').document(doc_id)
-    
     # 1. Avisar que empezamos
-    doc_ref.update({
+    url_order = f"{SUPABASE_URL}/rest/v1/ordenes_bot?id=eq.{doc_id}"
+    requests.patch(url_order, headers=HEADERS, json={
         'status': 'running',
         'worker': PC_NAME,
-        'inicio': firestore.SERVER_TIMESTAMP
+        'inicio': datetime.now().isoformat()
     })
+
+
 
     bot_type = datos.get('tipo_bot')
     ruta_archivo = datos.get('ruta_archivo')
@@ -181,7 +160,8 @@ def ejecutar_tarea(doc_id, datos):
 
     # CAPTURAR LOGS
     original_stdout = sys.stdout
-    sys.stdout = FirestoreLogger(doc_ref)
+    sys.stdout = SupabaseLogger(doc_id)
+
 
     try:
         execution_result = None
@@ -246,16 +226,18 @@ def ejecutar_tarea(doc_id, datos):
                 print("   ✅ Script de reinicio lanzado. Cerrando worker...")
                 
                 # Marcar orden como completada antes de morir
-                doc_ref.update({
+                requests.patch(url_order, headers=HEADERS, json={
                     'status': 'success',
                     'worker': PC_NAME,
-                    'fecha_termino': firestore.SERVER_TIMESTAMP,
+                    'fin': datetime.now().isoformat(),
                     'execution_logs': ["✅ Sistema reiniciando..."]
                 })
                 
-                # Dar un momento para que Firestore sincronice
+                # Dar un momento para que Supabase sincronice
                 time.sleep(2)
                 sys.exit(0) # Matar este proceso
+
+
                 
             except Exception as e:
                 print(f"❌ Error lanzando reinicio: {e}")
@@ -267,9 +249,9 @@ def ejecutar_tarea(doc_id, datos):
         print("✅ Tarea finalizada con éxito.")
         sys.stdout = original_stdout
         
-        doc_ref.update({
+        requests.patch(url_order, headers=HEADERS, json={
             'status': 'success',
-            'fin': firestore.SERVER_TIMESTAMP,
+            'fin': datetime.now().isoformat(),
             'mensaje': 'Ejecución completada en SAP.',
             'result_payload': execution_result
         })
@@ -277,10 +259,12 @@ def ejecutar_tarea(doc_id, datos):
     except Exception as e:
         sys.stdout = original_stdout
         print(f"❌ Error ejecutando bot: {e}")
-        doc_ref.update({
+        requests.patch(url_order, headers=HEADERS, json={
             'status': 'error',
             'error': str(e)
         })
+
+
 
 if __name__ == "__main__":
     # Solo procesar órdenes desde la interfaz web (botones)

@@ -819,21 +819,29 @@ JARVIS - Asistente de Automatización
                     new_faltantes['Fecha_Agregado'] = current_date
                     if 'Estado_NC' not in new_faltantes.columns:
                         new_faltantes['Estado_NC'] = ""
+                    if 'NC_Manual' not in new_faltantes.columns:
+                        new_faltantes['NC_Manual'] = ""
                     if 'Procesado_Color' not in new_faltantes.columns:
                         new_faltantes['Procesado_Color'] = ""
                         
                 if not new_sobrantes.empty:
                     new_sobrantes['Fecha_Agregado'] = current_date
+                    if 'NC_Manual' not in new_sobrantes.columns:
+                        new_sobrantes['NC_Manual'] = ""
                     if 'Procesado_Color' not in new_sobrantes.columns:
                         new_sobrantes['Procesado_Color'] = ""
                     
                 if not new_dano_mecanico.empty:
                     new_dano_mecanico['Fecha_Agregado'] = current_date
+                    if 'NC_Manual' not in new_dano_mecanico.columns:
+                        new_dano_mecanico['NC_Manual'] = ""
                     if 'Procesado_Color' not in new_dano_mecanico.columns:
                         new_dano_mecanico['Procesado_Color'] = ""
                     
                 if not new_transportes.empty:
                     new_transportes['Fecha_Agregado'] = current_date
+                    if 'NC_Manual' not in new_transportes.columns:
+                        new_transportes['NC_Manual'] = ""
                     if 'Procesado_Color' not in new_transportes.columns:
                         new_transportes['Procesado_Color'] = ""
                 # --------------------------------
@@ -851,25 +859,25 @@ JARVIS - Asistente de Automatización
                     before = len(final_faltantes)
                     # Usamos subset para drop_duplicates, excluyendo metadatos variables
                     # IMPORTANTE: keep='first' conserva el registro ANTIGUO (con su fecha original)
-                    subset_cols = [c for c in final_faltantes.columns if c not in ['Fecha_Email', 'Estado_NC', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
+                    subset_cols = [c for c in final_faltantes.columns if c not in ['Fecha_Email', 'Estado_NC', 'NC_Manual', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_faltantes = final_faltantes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Faltantes: {before} → {len(final_faltantes)} (eliminados {before - len(final_faltantes)} duplicados)")
                     
                 if not final_sobrantes.empty:
                     before = len(final_sobrantes)
-                    subset_cols = [c for c in final_sobrantes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
+                    subset_cols = [c for c in final_sobrantes.columns if c not in ['Fecha_Email', 'NC_Manual', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_sobrantes = final_sobrantes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Sobrantes: {before} → {len(final_sobrantes)} (eliminados {before - len(final_sobrantes)} duplicados)")
                     
                 if not final_dano_mecanico.empty:
                     before = len(final_dano_mecanico)
-                    subset_cols = [c for c in final_dano_mecanico.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
+                    subset_cols = [c for c in final_dano_mecanico.columns if c not in ['Fecha_Email', 'NC_Manual', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_dano_mecanico = final_dano_mecanico.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Daño Mecánico: {before} → {len(final_dano_mecanico)} (eliminados {before - len(final_dano_mecanico)} duplicados)")
                 
                 if not final_transportes.empty:
                     before = len(final_transportes)
-                    subset_cols = [c for c in final_transportes.columns if c not in ['Fecha_Email', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
+                    subset_cols = [c for c in final_transportes.columns if c not in ['Fecha_Email', 'NC_Manual', 'Fecha_Agregado', 'Origen_Archivo', 'Origen_Email', 'Asunto_Email', 'Procesado_Color']]
                     final_transportes = final_transportes.drop_duplicates(subset=subset_cols, keep='first')
                     print(f"   🧹 Transportes: {before} → {len(final_transportes)} (eliminados {before - len(final_transportes)} duplicados)")
 

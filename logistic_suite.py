@@ -76,6 +76,13 @@ except Exception as e:
     print(f"❌ Error Reporte Cambiados: {e}")
     BotReporteCambiados = None
 
+try:
+    from Bot_SAP_Existencias import SapBotExistencias
+    print("✅ SAP Existencias cargado.")
+except Exception as e:
+    print(f"❌ Error SAP Existencias: {e}")
+    SapBotExistencias = None
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -105,6 +112,7 @@ class App(ctk.CTk):
         # --- REPORTES ---
         ctk.CTkLabel(self.sidebar, text="📊 REPORTES", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
         self.crear_boton("Reporte: Cambiados", self.panel_reporte_cambiados)
+        self.crear_boton("Control de Existencias", self.panel_existencias)
 
         # --- PANEL CENTRAL ---
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -156,6 +164,10 @@ class App(ctk.CTk):
         self.log_box.delete("0.0", "end")
         self.entry_file.delete(0, "end")
         
+        # Limpiar switch si existe
+        if hasattr(self, "switch"):
+            self.switch.pack_forget()
+
         if necesita_archivo:
             self.entry_file.pack(pady=5)
             self.btn_select.pack(pady=5)
@@ -212,6 +224,18 @@ class App(ctk.CTk):
         self.reset_ui("Reporte Cambiados Zonales", 
                       "Genera el borrador del correo con la tabla de 'Cambiados'.\n\nRequiere que el Excel 'Reporte Desv. Zonales...' esté en OneDrive.", 
                       False)
+
+    def panel_existencias(self):
+        self.bot_actual_class = SapBotExistencias
+        self.reset_ui("Control de Existencias", 
+                      "Ejecuta el bot de SAP para verificar negativos en 920 y documentos pendientes.\n\nModo Normal: Ejecuta análisis real.\nModo Simulacro: Fuerza alertas para pruebas.", 
+                      False)
+        
+        if not hasattr(self, "switch"):
+            self.switch_var = ctk.StringVar(value="normal")
+            self.switch = ctk.CTkSwitch(self.main_frame, text="Modo Simulacro", variable=self.switch_var, on_value="simulation", off_value="normal")
+        
+        self.switch.pack(pady=10)
 
     # --- LOGICA ---
     def sel_archivo(self):
@@ -271,6 +295,12 @@ class App(ctk.CTk):
                 bot.run(ruta) 
             elif self.bot_actual_class == SapBotAuditor:
                 bot.run(arg_extra)
+            elif self.bot_actual_class == SapBotExistencias:
+                # Obtener valor del switch si existe
+                mode = "normal"
+                if hasattr(self, "switch_var"):
+                    mode = self.switch_var.get()
+                bot.run(mode)
             else: # Transporte
                 bot.run()
                 

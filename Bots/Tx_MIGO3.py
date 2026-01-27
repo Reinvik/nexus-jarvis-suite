@@ -50,7 +50,7 @@ class SapMigoBotTurbo:
                     print(f"   Reintentando en 2 segundos...")
                     time.sleep(2)
         
-        print("Error conectando a SAP. Asegúrate de tener SAP abierto.")
+        print("Error conectando a SAP. Asegúrate de tener SAP abierto y logueado.")
         return False
 
     def reconnect_if_needed(self):
@@ -88,7 +88,8 @@ class SapMigoBotTurbo:
             return val
         for col in df.columns:
             df[col] = df[col].apply(remove_trailing_zero)
-            df[col] = df[col].replace({'nan': '', 'None': ''})
+            df[col] = df[col].replace({'nan': '', 'None': '', 'NaT': ''})
+            df[col] = df[col].fillna('')
         return df
 
     def read_excel_dynamic(self, excel_path):
@@ -145,7 +146,7 @@ class SapMigoBotTurbo:
                     return table
                 except: continue
             time.sleep(0.2)
-        print("Error Crítico: No se encontró la tabla.")
+        print("Error Crítico: No se encontró la tabla. Verifique que MIGO esté abierto y en la pestaña correcta.")
         return None
 
     def map_columns(self):

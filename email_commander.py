@@ -243,8 +243,8 @@ class NexusEmailCommander:
             # Consulta refinada: Éxito + No Reportado
             # Nota: Si falla por falta de índice compuesto, revertir a filtro en memoria
             docs = self.db.collection('ordenes_bot')\
-                .where('status', '==', 'success')\
-                .where('parametros.email_reported', '==', False)\
+                .where(filter=firestore.FieldFilter('status', '==', 'success'))\
+                .where(filter=firestore.FieldFilter('parametros.email_reported', '==', False))\
                 .limit(20).stream()
             
             docs_list = list(docs)
@@ -261,7 +261,7 @@ class NexusEmailCommander:
             try:
                 # print(f"⚠️ Index Error (posible), reintentando en memoria: {e}")
                 docs = self.db.collection('ordenes_bot')\
-                    .where('status', '==', 'success')\
+                    .where(filter=firestore.FieldFilter('status', '==', 'success'))\
                     .limit(20).stream()
                 
                 for doc in docs:

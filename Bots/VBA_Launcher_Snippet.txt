@@ -1,0 +1,46 @@
+Sub LanzarBotMigoPython()
+    ' ==========================================================================================
+    ' MACRO PARA LANZAR EL BOT DE PYTHON (MIGO 301)
+    ' Esta macro ejecuta el script de Python de forma asíncrona.
+    ' Excel NO se quedará pegado. Se abrirá una ventana negra con el progreso.
+    ' ==========================================================================================
+    
+    Dim objShell As Object
+    Dim pythonScript As String
+    Dim excelPath As String
+    Dim command As String
+    Dim pythonExe As String
+    
+    ' 1. Ruta del Script de Python (AJUSTAR SI ES NECESARIO)
+    ' Se asume que está en la misma carpeta que los otros bots o en una ruta fija.
+    ' Aquí usamos la ruta donde lo hemos creado:
+    pythonScript = "c:\Users\ariel.mella\OneDrive - CIAL Alimentos\Escritorio\respaldo\Antigravity\Apps\Nexus_Jarvis\Bots\Bot_Traspaso_SDIF_MIGO.py"
+    
+    ' 2. Ruta del Excel Actual (El que tiene los datos)
+    excelPath = ActiveWorkbook.FullName
+    
+    ' Validar que el archivo esté guardado
+    If InStr(excelPath, "\") = 0 Then
+        MsgBox "Por favor, guarde el archivo Excel antes de ejecutar el bot.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 3. Comando para ejecutar
+    ' Usamos "python" asumiendo que está en el PATH. Si no, poner ruta completa a python.exe
+    pythonExe = "python" 
+    
+    ' Construir el comando: python "script" "excel"
+    command = pythonExe & " """ & pythonScript & """ """ & excelPath & """"
+    
+    ' 4. Ejecutar Asíncronamente
+    Set objShell = CreateObject("WScript.Shell")
+    
+    ' El '1' significa mostrar la ventana normal. El 'False' significa NO esperar a que termine.
+    objShell.Run command, 1, False
+    
+    Set objShell = Nothing
+    
+    ' Mensaje opcional (puede quitarse si se quiere más rapidez)
+    ' MsgBox "Bot lanzado en segunda plano. Revise la ventana negra.", vbInformation
+
+End Sub

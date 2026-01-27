@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db, storage } from './firebaseConfig';
-import { collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from './supabaseClient';
+
 import { BotDefinition, BotType, Order } from './types';
 import {
   Bot,
@@ -220,28 +219,47 @@ export default function App() {
     setIsSettingsOpen(true);
   };
 
-  // --- Firestore Logic ---
+  // --- Supabase Realtime Logic ---
   useEffect(() => {
-    const q = query(
-      collection(db, 'ordenes_bot'),
-      orderBy('fecha_creacion', 'desc'),
-      limit(500)
-    );
+    // Initial fetch
+    const fetchOrders = async () => {
+      const { data, error } = await supabase
+        .from('ordenes_bot')
+        .select('*')
+        .order('fecha_creacion', { ascending: false })
+        .limit(500);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newOrders: Order[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Order));
+      if (data) setOrders(data as Order[]);
+    };
+    fetchOrders();
 
-      setOrders(newOrders);
-      const total = newOrders.length;
-      const success = newOrders.filter(o => o.status === 'success').length;
-      const pending = newOrders.filter(o => o.status === 'pending' || o.status === 'running').length;
-      setStats({ total, success, pending });
-    });
-    return () => unsubscribe();
+    // Subscribe to changes
+    const channel = supabase
+      .channel('ordenes_bot_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_bot' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setOrders(prev => [payload.new as Order, ...prev]);
+        } else if (payload.eventType === 'UPDATE') {
+          setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } as Order : o));
+        } else if (payload.eventType === 'DELETE') {
+          setOrders(prev => prev.filter(o => o.id === payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  // Sync stats when orders change
+  useEffect(() => {
+    const total = orders.length;
+    const success = orders.filter(o => o.status === 'success').length;
+    const pending = orders.filter(o => o.status === 'pending' || o.status === 'running').length;
+    setStats({ total, success, pending });
+  }, [orders]);
+
 
   const handleBotClick = (botId: string) => {
     setSelectedBotId(botId);
@@ -306,17 +324,24 @@ export default function App() {
             originalName += '.xlsx';
           }
         } else if (file) {
-          // Modo Upload Normal
+          // Modo Upload Normal (Supabase Storage)
           setSubmitStatus('Subiendo archivo...');
           // Sanear nombre de archivo
           const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const storageRef = ref(storage, `uploads/${Date.now()}_${sanitizedName}`);
+          const fileName = `${Date.now()}_${sanitizedName}`;
 
-          const snapshot = await uploadBytes(storageRef, file);
+          const { data, error } = await supabase.storage
+            .from('uploads')
+            .upload(fileName, file);
+
+          if (error) throw error;
+
           setSubmitStatus('Obteniendo URL...');
-          downloadURL = await getDownloadURL(snapshot.ref);
+          const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
+          downloadURL = urlData.publicUrl;
           originalName = file.name;
         }
+
       }
 
       setSubmitStatus('Creando orden...');
@@ -331,7 +356,7 @@ export default function App() {
       const newOrder = {
         tipo_bot: selectedBot.id,
         status: 'pending',
-        fecha_creacion: serverTimestamp(),
+        fecha_creacion: new Date().toISOString(),
         worker: 'En Cola',
         ruta_archivo: downloadURL, // Será vacío si es modo abierto
         nombre_archivo_original: originalName,
@@ -339,7 +364,9 @@ export default function App() {
         execution_logs: []
       };
 
-      await addDoc(collection(db, 'ordenes_bot'), newOrder);
+      const { error: insertError } = await supabase.from('ordenes_bot').insert([newOrder]);
+      if (insertError) throw insertError;
+
 
       // Reset UI after order is successfully created
       setFile(null);
@@ -363,15 +390,22 @@ export default function App() {
   const handleCancelOrder = async (orderId: string) => {
     if (!confirm("¿Estás seguro de que deseas cancelar esta orden?")) return;
     try {
-      await updateDoc(doc(db, 'ordenes_bot', orderId), {
-        status: 'cancelled',
-        execution_logs: [...(orders.find(o => o.id === orderId)?.execution_logs || []), "⚠️ Cancelado por el usuario"]
-      });
+      const currentOrder = orders.find(o => o.id === orderId);
+      const { error } = await supabase
+        .from('ordenes_bot')
+        .update({
+          status: 'cancelled',
+          execution_logs: [...(currentOrder?.execution_logs || []), "⚠️ Cancelado por el usuario"]
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
     } catch (error) {
       console.error("Error cancelling order:", error);
       alert("Error al cancelar la orden.");
     }
   };
+
 
   return (
     <div className="h-full flex bg-dark-bg text-slate-200 font-sans overflow-hidden">
@@ -427,14 +461,15 @@ export default function App() {
               onClick={async () => {
                 if (!confirm("¿Reiniciar todo el sistema? Esto cerrará los bots y recargará la interfaz.")) return;
                 try {
-                  await addDoc(collection(db, 'ordenes_bot'), {
+                  await supabase.from('ordenes_bot').insert([{
                     tipo_bot: 'SYSTEM_RESTART',
                     status: 'pending',
-                    fecha_creacion: serverTimestamp(),
+                    fecha_creacion: new Date().toISOString(),
                     worker: 'En Cola',
                     parametros: {}
-                  });
+                  }]);
                   alert("🔄 Reinicio solicitado. El sistema se cerrará y volverá a abrir en unos segundos.");
+
                 } catch (e) {
                   alert("Error solicitando reinicio");
                 }
@@ -658,7 +693,12 @@ export default function App() {
             {orders.length === 0 ? <div className="text-slate-700 text-center mt-6 italic text-xs">-- Sin eventos --</div> : orders.map((order) => (
               <div key={order.id} className="mb-1">
                 <div className="flex gap-3 hover:bg-white/[0.02] p-0.5 rounded transition-colors group">
-                  <span className="text-slate-600 w-16 flex-shrink-0 text-[10px] pt-0.5">{order.fecha_creacion?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  <span className="text-slate-600 w-16 flex-shrink-0 text-[10px] pt-0.5">
+                    {order.fecha_creacion
+                      ? new Date(order.fecha_creacion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      : '--:--:--'}
+                  </span>
+
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5">
                       <StatusIndicator status={order.status} />
