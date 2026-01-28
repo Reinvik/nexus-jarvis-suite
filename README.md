@@ -51,7 +51,7 @@ Nexus JARVIS proporciona:
                          │ HTTP/WebSocket
 ┌────────────────────────▼────────────────────────────────────┐
 │              ORQUESTADOR CENTRAL (Python)                   │
-│           worker_sap.py + Firebase Realtime DB              │
+│      worker_sap.py + Nexus API (Local) + Firebase DB        │
 └────────────────────────┬────────────────────────────────────┘
                          │
         ┌────────────────┼────────────────┐
@@ -258,6 +258,17 @@ cd Interfaz_Vercel
 # Desplegar
 vercel --prod
 ```
+
+### 💻 Modo Local (Sin Dependencia Cloud)
+
+Para entornos donde no se requiere sincronización con la nube o para máxima velocidad:
+
+1.  **Backend:** Inicia `nexus_manager.py` (esto levanta el servidor API local en puerto 8000).
+2.  **Frontend:** Inicia la Interfaz React (`npm run dev`).
+3.  **Configuración:** En la web, ve a Configuración > Perfil y selecciona modo **"💻 Local PC"**.
+
+En este modo, las órdenes viajan directamente del navegador al worker de Python vía `localhost`, sin pasar por Internet.
+
 
 ---
 

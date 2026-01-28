@@ -6,3 +6,8 @@ pywin32
 requests
 pillow
 google-generativeai
+
+pyperclip
+
+fastapi
+uvicorn

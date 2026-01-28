@@ -25,6 +25,12 @@ SERVICES = [
         "script": "worker_zonales.py",
         "color": "\033[93m", # Amarillo
         "enabled": True
+    },
+    {
+        "name": "NEXUS API",
+        "script": "nexus_server.py",
+        "color": "\033[95m", # Magenta
+        "enabled": True
     }
 ]
 
@@ -75,6 +81,8 @@ def run_service(service_info):
                 cmd = [exe_path, "--email-commander"]
             elif script == "worker_zonales.py":
                 cmd = [exe_path, "--worker-zonales"]
+            elif script == "nexus_server.py":
+                cmd = [exe_path, "--api-server"]
             else:
                 log(name, f"[WARN] Script desconocido en modo EXE: {script}", color)
                 time.sleep(5)

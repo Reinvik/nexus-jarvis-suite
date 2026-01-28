@@ -8,10 +8,7 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 
-
-
 # --- CONFIGURACIÓN UTF-8 PARA WINDOWS ---
-# Esto evita errores de codificación con emojis en la consola de Windows
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -46,16 +43,15 @@ HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
-    "Prefer": "return=minimal"
+    "Prefer": "return=minimal",
+    "Accept-Profile": "public",
+    "Content-Profile": "public"
 }
 
 def init_supabase():
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("❌ Error: Faltan variables de entorno SUPABASE_URL o SUPABASE_KEY")
         sys.exit(1)
-    # Ya no necesitamos crear un cliente pesado, usaremos requests
-
-
 
 def start_worker():
     init_supabase()
@@ -69,7 +65,6 @@ def procesar_ordenes():
     
     while True:
         try:
-            # Consultar órdenes pendientes vía REST
             response = requests.get(url, headers=HEADERS)
             if response.status_code == 200:
                 ordenes = response.json()
@@ -82,7 +77,7 @@ def procesar_ordenes():
         except Exception as e:
             print(f"⚠️ Error consultando órdenes: {e}")
         
-        time.sleep(3) # Polling cada 3 segundos
+        time.sleep(3)
 
 # --- LOGGER SUPABASE ---
 class SupabaseLogger:
@@ -97,7 +92,6 @@ class SupabaseLogger:
         text = message.strip()
         if text:
             try:
-                # Llamada al RPC de logs
                 requests.post(self.url, headers=HEADERS, json={
                     'order_id': self.doc_id,
                     'log_line': text
@@ -108,7 +102,76 @@ class SupabaseLogger:
     def flush(self):
         self.terminal.flush()
 
+def run_automation(bot_type, ruta_archivo, params):
+    """Core logic to dispatch bots. Used by both Cloud and Local modes."""
+    execution_result = None
 
+    if bot_type == 'MIGO':
+        bot = SapMigoBotTurbo()
+        bot.run(ruta_archivo)
+        
+    elif bot_type == 'PALLET':
+        bot = SapBotPallet()
+        bot.run(ruta_archivo)
+        
+    elif bot_type == 'TRANSPORTE':
+        bot = SapBotTransporte()
+        fechas = params.get('fechas')
+        enviar_correo = params.get('sendEmail', False)
+        print(f"🚚 Ejecutando Bot Transporte con fechas: {fechas}, enviar_correo: {enviar_correo}")
+        bot.run(fechas, enviar_correo)
+        
+    elif bot_type == 'AUDITOR':
+        bot = SapBotAuditor()
+        almacen = params.get('almacen', 'SGVT')
+        execution_result = bot.run(almacen)
+        
+    elif bot_type == 'LT01':
+        bot = SapBotTraspasoLT01()
+        bot.run(ruta_archivo)
+        
+    elif bot_type == 'UMV':
+        bot = SapBotConversiones()
+        bot.run(ruta_archivo)
+        
+    elif bot_type == 'CONCILIACION_EMAIL':
+        bot = SapBotConciliacionEmail()
+        bot.run()
+        
+    elif bot_type == 'ZONALES':
+        bot = BotConsolidacionZonales()
+        bot.run()
+
+    elif bot_type == 'ANALISIS_ZONALES':
+        bot = BotAnalisisZonales()
+        bot.run()
+        
+    elif bot_type == 'VISION':
+        bot = BotVisionPizarra()
+        bot.run(ruta_archivo)
+        
+    elif bot_type == 'SYSTEM_RESTART':
+        print("🔄 REINICIO SOLICITADO")
+        import subprocess
+        try:
+            subprocess.Popen(
+                ['cmd', '/c', 'start', 'reiniciar.bat'],
+                cwd=os.getcwd(),
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+            print("   ✅ Script de reinicio lanzado.")
+            # Local mode might not want to exit essentially killing the server? 
+            # But the goal of restart is to restart everything.
+            return "RESTARTING"
+            
+        except Exception as e:
+            print(f"❌ Error lanzando reinicio: {e}")
+            raise e
+    
+    else:
+        raise Exception(f"Tipo de bot desconocido: {bot_type}")
+        
+    return execution_result
 
 def ejecutar_tarea(doc_id, datos):
     # 1. Avisar que empezamos
@@ -119,42 +182,30 @@ def ejecutar_tarea(doc_id, datos):
         'inicio': datetime.now().isoformat()
     })
 
-
-
     bot_type = datos.get('tipo_bot')
     ruta_archivo = datos.get('ruta_archivo')
     
-    # --- DEBUG: Ver qué llega ---
     print(f"🔍 Datos completos de la orden: {datos}")
-    print(f"🔍 Parámetros extraídos: {datos.get('parametros')}")
-    # ----------------------------
-
+    
     # DESCARGAR ARCHIVO SI ES URL
-    archivo_local = None
     if ruta_archivo and ruta_archivo.startswith("http"):
         try:
             print(f"⬇️ Descargando archivo desde: {ruta_archivo[:50]}...")
             response = requests.get(ruta_archivo)
             if response.status_code == 200:
-                # Crear archivo temporal manteniendo la extensión original si es posible
                 nombre_original = datos.get('nombre_archivo_original', 'archivo_temp.xlsx')
-                ext = os.path.splitext(nombre_original)[1]
-                if not ext: ext = ".xlsx"
-                
+                ext = os.path.splitext(nombre_original)[1] or ".xlsx"
                 temp_dir = tempfile.gettempdir()
                 archivo_local = os.path.join(temp_dir, f"temp_bot_{int(time.time())}{ext}")
-                
                 with open(archivo_local, 'wb') as f:
                     f.write(response.content)
-                
-                print(f"✅ Archivo descargado en: {archivo_local}")
                 ruta_archivo = archivo_local
+                print(f"✅ Archivo descargado en: {archivo_local}")
             else:
                 print(f"⚠️ Error descargando archivo: Status {response.status_code}")
         except Exception as e:
             print(f"❌ Error descargando archivo: {e}")
     elif not ruta_archivo and datos.get('nombre_archivo_original'):
-        # MODO ARCHIVO ABIERTO / LOCAL
         ruta_archivo = datos.get('nombre_archivo_original')
         print(f"📂 Modo Local/Abierto: Usando nombre '{ruta_archivo}'")
 
@@ -162,89 +213,20 @@ def ejecutar_tarea(doc_id, datos):
     original_stdout = sys.stdout
     sys.stdout = SupabaseLogger(doc_id)
 
-
     try:
-        execution_result = None
+        # CALL THE REFACTORED FUNCTION
+        execution_result = run_automation(bot_type, ruta_archivo, datos.get('parametros', {}))
 
-        # --- ENRUTADOR DE BOTS ---
-        if bot_type == 'MIGO':
-            bot = SapMigoBotTurbo()
-            bot.run(ruta_archivo)
-            
-        elif bot_type == 'PALLET':
-            bot = SapBotPallet()
-            bot.run(ruta_archivo)
-            
-        elif bot_type == 'TRANSPORTE':
-            bot = SapBotTransporte()
-            fechas = datos.get('parametros', {}).get('fechas')
-            enviar_correo = datos.get('parametros', {}).get('sendEmail', False)
-            print(f"🚚 Ejecutando Bot Transporte con fechas: {fechas}, enviar_correo: {enviar_correo}")
-            bot.run(fechas, enviar_correo)
-            
-        elif bot_type == 'AUDITOR':
-            bot = SapBotAuditor()
-            almacen = datos.get('parametros', {}).get('almacen', 'SGVT')
-            execution_result = bot.run(almacen)
-            
-        elif bot_type == 'LT01':
-            bot = SapBotTraspasoLT01()
-            bot.run(ruta_archivo)
-            
-        elif bot_type == 'UMV':
-            bot = SapBotConversiones()
-            bot.run(ruta_archivo)
-            
-        elif bot_type == 'CONCILIACION_EMAIL':
-            bot = SapBotConciliacionEmail()
-            bot.run()
-            
-        elif bot_type == 'ZONALES':
-            bot = BotConsolidacionZonales()
-            bot.run()
-
-        elif bot_type == 'ANALISIS_ZONALES':
-            bot = BotAnalisisZonales()
-            bot.run()
-            
-        elif bot_type == 'VISION':
-            bot = BotVisionPizarra()
-            bot.run(ruta_archivo)
-            
-        elif bot_type == 'SYSTEM_RESTART':
-            print("🔄 REINICIO SOLICITADO POR USUARIO")
-            print("   Lanzando reiniciar.bat...")
-            
-            # Lanzar reiniciar.bat en una nueva consola independiente
-            import subprocess
-            try:
-                subprocess.Popen(
-                    ['cmd', '/c', 'start', 'reiniciar.bat'],
-                    cwd=os.getcwd(),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE
-                )
-                print("   ✅ Script de reinicio lanzado. Cerrando worker...")
-                
-                # Marcar orden como completada antes de morir
-                requests.patch(url_order, headers=HEADERS, json={
-                    'status': 'success',
-                    'worker': PC_NAME,
-                    'fin': datetime.now().isoformat(),
-                    'execution_logs': ["✅ Sistema reiniciando..."]
-                })
-                
-                # Dar un momento para que Supabase sincronice
-                time.sleep(2)
-                sys.exit(0) # Matar este proceso
-
-
-                
-            except Exception as e:
-                print(f"❌ Error lanzando reinicio: {e}")
-                raise e
-        
-        else:
-            raise Exception(f"Tipo de bot desconocido: {bot_type}")
+        # Handle restart special case
+        if execution_result == "RESTARTING":
+            requests.patch(url_order, headers=HEADERS, json={
+                'status': 'success',
+                'worker': PC_NAME,
+                'fin': datetime.now().isoformat(),
+                'execution_logs': ["✅ Sistema reiniciando..."]
+            })
+            time.sleep(2)
+            sys.exit(0)
 
         print("✅ Tarea finalizada con éxito.")
         sys.stdout = original_stdout
@@ -264,9 +246,5 @@ def ejecutar_tarea(doc_id, datos):
             'error': str(e)
         })
 
-
-
 if __name__ == "__main__":
-    # Solo procesar órdenes desde la interfaz web (botones)
-    # Los bots de Email y Zonales se activan manualmente como los demás
     start_worker()

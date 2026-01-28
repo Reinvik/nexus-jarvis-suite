@@ -129,13 +129,15 @@ const IconMap: Record<string, React.ElementType> = {
 interface AppConfig {
   userName: string;
   bots: BotDefinition[];
+  connectionMode: 'cloud' | 'local';
 }
 
 export default function App() {
   // --- Config State ---
   const [config, setConfig] = useState<AppConfig>({
     userName: 'Usuario SAP',
-    bots: DEFAULT_BOTS
+    bots: DEFAULT_BOTS,
+    connectionMode: 'cloud'
   });
 
   // Temp state for the settings modal
@@ -192,7 +194,8 @@ export default function App() {
         });
         setConfig({
           userName: parsed.userName || 'Usuario SAP',
-          bots: mergedBots
+          bots: mergedBots,
+          connectionMode: parsed.connectionMode || 'cloud'
         });
       } catch (e) {
         console.error("Error loading config", e);
@@ -207,9 +210,10 @@ export default function App() {
   };
 
   const restoreDefaults = () => {
-    const defaultConfig = {
+    const defaultConfig: AppConfig = {
       userName: 'Usuario SAP',
-      bots: DEFAULT_BOTS
+      bots: DEFAULT_BOTS,
+      connectionMode: 'cloud'
     };
     setTempConfig(defaultConfig);
   };
@@ -315,6 +319,7 @@ export default function App() {
     try {
       let downloadURL = '';
       let originalName = '';
+      let localFilePath = ''; // Para modo local
 
       if (selectedBot.requiresFile) {
         if (useOpenMode) {
@@ -323,28 +328,34 @@ export default function App() {
           if (selectedBot.fileType === 'excel' && !originalName.match(/\.(xls|xlsx|xlsm)$/i)) {
             originalName += '.xlsx';
           }
+          localFilePath = originalName; // En modo local, esto es suficiente si es Open Mode
         } else if (file) {
-          // Modo Upload Normal (Supabase Storage)
-          setSubmitStatus('Subiendo archivo...');
-          // Sanear nombre de archivo
-          const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const fileName = `${Date.now()}_${sanitizedName}`;
-
-          const { data, error } = await supabase.storage
-            .from('uploads')
-            .upload(fileName, file);
-
-          if (error) throw error;
-
-          setSubmitStatus('Obteniendo URL...');
-          const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
-          downloadURL = urlData.publicUrl;
           originalName = file.name;
-        }
+          if (config.connectionMode === 'cloud') {
+            // Modo Upload Normal (Supabase Storage) SOLO para Cloud
+            setSubmitStatus('Subiendo archivo...');
+            // Sanear nombre de archivo
+            const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fileName = `${Date.now()}_${sanitizedName}`;
 
+            const { data, error } = await supabase.storage
+              .from('uploads')
+              .upload(fileName, file);
+
+            if (error) throw error;
+
+            setSubmitStatus('Obteniendo URL...');
+            const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
+            downloadURL = urlData.publicUrl;
+          } else {
+            // Local Mode + Upload not full supported yet without extra API
+            alert("⚠️ En Modo Local, por favor utiliza 'Usar Archivo Local/Abierto' e ingresa el nombre/ruta del archivo en tu PC para mayor velocidad. La carga de archivos no está optimizada en modo directo.");
+            setIsSubmitting(false);
+            return;
+          }
+        }
       }
 
-      setSubmitStatus('Creando orden...');
       const parametros: Record<string, any> = {};
       if (selectedBot.id === 'AUDITOR') parametros.almacen = paramValue;
       if (selectedBot.id === 'TRANSPORTE') {
@@ -353,20 +364,43 @@ export default function App() {
         parametros.sendEmail = sendEmail;
       }
 
-      const newOrder = {
-        tipo_bot: selectedBot.id,
-        status: 'pending',
-        fecha_creacion: new Date().toISOString(),
-        worker: 'En Cola',
-        ruta_archivo: downloadURL, // Será vacío si es modo abierto
-        nombre_archivo_original: originalName,
-        parametros: parametros,
-        execution_logs: []
-      };
+      setSubmitStatus(config.connectionMode === 'local' ? 'Enviando local...' : 'Creando orden...');
 
-      const { error: insertError } = await supabase.from('ordenes_bot').insert([newOrder]);
-      if (insertError) throw insertError;
+      if (config.connectionMode === 'local') {
+        // --- LOCAL MODE EXECUTION ---
+        const response = await fetch('http://localhost:8000/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            botId: selectedBot.id,
+            params: parametros,
+            filePath: localFilePath || downloadURL || undefined
+          })
+        });
 
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || 'Error en servidor local');
+
+        alert(`✅ Ejecución Local Iniciada Exitosamente.\n\nResultado: ${JSON.stringify(result.result)}`);
+
+      } else {
+        // --- CLOUD MODE EXECUTION (Supabase) ---
+        const newOrder = {
+          tipo_bot: selectedBot.id,
+          status: 'pending',
+          fecha_creacion: new Date().toISOString(),
+          worker: 'En Cola',
+          ruta_archivo: downloadURL, // Será vacío si es modo abierto
+          nombre_archivo_original: originalName,
+          parametros: parametros,
+          execution_logs: []
+        };
+
+        const { error: insertError } = await supabase.from('ordenes_bot').insert([newOrder]);
+        if (insertError) throw insertError;
+
+        alert("✅ Orden enviada a la nube exitosamente.\n\nPuedes ver el progreso en la Consola de Eventos.");
+      }
 
       // Reset UI after order is successfully created
       setFile(null);
@@ -378,7 +412,6 @@ export default function App() {
       setIsSubmitting(false);
       setSubmitStatus('Enviando...');
 
-      alert("✅ Orden enviada exitosamente.\n\nPuedes ver el progreso en la Consola de Eventos abajo.");
     } catch (error) {
       console.error("Error creating order:", error);
       setIsSubmitting(false);
@@ -505,8 +538,13 @@ export default function App() {
             <span className="text-[10px] font-mono text-emerald-400">SISTEMA CONECTADO</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-right">
-              <span className="block text-[9px] text-slate-500 uppercase tracking-wider">Bienvenido,</span>
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[9px] text-slate-500 uppercase tracking-wider">Modo:</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${config.connectionMode === 'local' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-nexus-500/20 text-nexus-400 border border-nexus-500/30'}`}>
+                  {config.connectionMode === 'local' ? 'LOCAL PC' : 'CLOUD'}
+                </span>
+              </div>
               <span className="block text-xs font-bold text-white tracking-wide">{config.userName}</span>
             </div>
             <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center border border-white/10 shadow-lg shadow-black/50">
@@ -749,8 +787,8 @@ export default function App() {
 
               {/* Sección Perfil */}
               <div className="space-y-4">
-                <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-widest border-b border-white/5 pb-2">Perfil de Usuario</h4>
-                <div className="grid grid-cols-1 gap-4">
+                <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-widest border-b border-white/5 pb-2">Perfil y Conexión</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Nombre para Mostrar</label>
                     <input
@@ -759,6 +797,34 @@ export default function App() {
                       onChange={(e) => setTempConfig({ ...tempConfig, userName: e.target.value })}
                       className="w-full bg-dark-bg border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-nexus-500 focus:outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Modo de Conexión</label>
+                    <div className="flex bg-dark-bg rounded-lg border border-slate-700 p-0.5">
+                      <button
+                        onClick={() => setTempConfig({ ...tempConfig, connectionMode: 'cloud' })}
+                        className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${tempConfig.connectionMode === 'cloud'
+                            ? 'bg-nexus-500 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                          }`}
+                      >
+                        ☁️ Cloud
+                      </button>
+                      <button
+                        onClick={() => setTempConfig({ ...tempConfig, connectionMode: 'local' })}
+                        className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${tempConfig.connectionMode === 'local'
+                            ? 'bg-emerald-500 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                          }`}
+                      >
+                        💻 Local PC
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-1">
+                      {tempConfig.connectionMode === 'local'
+                        ? "Control directo al PC (Sin internet, Latencia cero)"
+                        : "Sincronización vía Supabase (Múltiples dispositivos)"}
+                    </p>
                   </div>
                 </div>
               </div>
